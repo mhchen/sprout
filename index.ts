@@ -2,6 +2,7 @@
 import * as p from "@clack/prompts";
 import { cli, command } from "cleye";
 import { $ } from "bun";
+import fuzzysearch from "fuzzysearch";
 
 interface PR {
   number: number;
@@ -80,13 +81,20 @@ async function checkout() {
     process.exit(0);
   }
 
-  const selected = await p.select({
+  const selected = await p.autocomplete({
     message: "Select a PR to checkout as a worktree",
     options: prs.map((pr) => ({
       value: pr,
       label: `#${pr.number}: ${pr.title}`,
       hint: `${pr.headRefName} by ${pr.author.login}`,
     })),
+    filter: (search, option) => {
+      const needle = search.toLowerCase();
+      return (
+        fuzzysearch(needle, option.label.toLowerCase()) ||
+        fuzzysearch(needle, (option.hint ?? "").toLowerCase())
+      );
+    },
   });
 
   if (p.isCancel(selected)) {

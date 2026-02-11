@@ -8,13 +8,15 @@
     "sprout": "./index.ts"
   },
   "devDependencies": {
-    "@types/bun": "latest"
+    "@types/bun": "latest",
+    "@types/fuzzysearch": "^1.0.2"
   },
   "peerDependencies": {
     "typescript": "^5"
   },
   "dependencies": {
-    "@clack/prompts": "^0.11.0",
-    "cleye": "^2.2.1"
+    "@clack/prompts": "^1.0.0",
+    "cleye": "^2.2.1",
+    "fuzzysearch": "^1.0.3"
   }
 }
