@@ -3,6 +3,14 @@ import * as p from "@clack/prompts";
 import { cli, command } from "cleye";
 import { $ } from "bun";
 import fuzzysearch from "fuzzysearch";
+import { getLinearApiKey, fetchLinearIssues, type LinearIssue } from "./linear";
+import {
+  slugify,
+  getRepoRoot,
+  parseWorktrees,
+  ensureWorktree,
+  launchShell,
+} from "./worktree";
 
 interface PR {
   number: number;
@@ -11,45 +19,15 @@ interface PR {
   author: { login: string };
 }
 
-interface Worktree {
-  path: string;
-  branch: string;
-}
-
-function slugify(branch: string): string {
-  return branch.replace(/\//g, "-").slice(0, 40);
-}
-
-async function getRepoRoot(): Promise<string> {
-  const gitRoot = await $`git rev-parse --show-toplevel`
-    .text()
-    .catch(() => null);
-  if (!gitRoot) {
-    p.cancel("Not in a git repository");
-    process.exit(1);
-  }
-  return gitRoot.trim();
-}
-
-async function parseWorktrees(): Promise<Worktree[]> {
-  const output = await $`git worktree list --porcelain`.text();
-  const worktrees: Worktree[] = [];
-  let current: Partial<Worktree> = {};
-
-  for (const line of output.split("\n")) {
-    if (line.startsWith("worktree ")) {
-      current.path = line.slice(9);
-    } else if (line.startsWith("branch ")) {
-      current.branch = line.slice(7).replace("refs/heads/", "");
-    } else if (line === "") {
-      if (current.path && current.branch) {
-        worktrees.push(current as Worktree);
-      }
-      current = {};
-    }
-  }
-
-  return worktrees;
+function fuzzyFilter(
+  search: string,
+  option: { label: string; hint?: string },
+): boolean {
+  const needle = search.toLowerCase();
+  return (
+    fuzzysearch(needle, option.label.toLowerCase()) ||
+    fuzzysearch(needle, (option.hint ?? "").toLowerCase())
+  );
 }
 
 async function checkout() {
@@ -88,13 +66,7 @@ async function checkout() {
       label: `#${pr.number}: ${pr.title}`,
       hint: `${pr.headRefName} by ${pr.author.login}`,
     })),
-    filter: (search, option) => {
-      const needle = search.toLowerCase();
-      return (
-        fuzzysearch(needle, option.label.toLowerCase()) ||
-        fuzzysearch(needle, (option.hint ?? "").toLowerCase())
-      );
-    },
+    filter: fuzzyFilter,
   });
 
   if (p.isCancel(selected)) {
@@ -103,53 +75,67 @@ async function checkout() {
   }
 
   const pr = selected as PR;
-
   const worktreePath = `${repoRoot}--${slugify(pr.headRefName)}`;
 
-  const worktrees = await parseWorktrees();
-  const worktreeExists = worktrees.some((wt) => wt.path === worktreePath);
-
-  if (worktreeExists) {
-    p.log.info(`Worktree already exists at ${worktreePath}`);
-  } else {
-    const createSpinner = p.spinner();
-    createSpinner.start(`Creating worktree for PR #${pr.number}...`);
-
-    const fetchResult = await $`gh pr checkout ${pr.number} --detach`
-      .quiet()
-      .catch((e) => e);
-    if (fetchResult instanceof Error) {
-      createSpinner.stop("Failed to fetch PR");
-      p.cancel(`Could not fetch PR: ${fetchResult.message}`);
-      process.exit(1);
-    }
-
+  await ensureWorktree(worktreePath, `PR #${pr.number}`, async () => {
+    await $`gh pr checkout ${pr.number} --detach`.quiet();
     await $`git checkout -`.quiet();
+    await $`git worktree add ${worktreePath} ${pr.headRefName}`.quiet();
+  });
 
-    const worktreeResult =
-      await $`git worktree add ${worktreePath} ${pr.headRefName}`
-        .quiet()
-        .catch((e) => e);
+  await launchShell(worktreePath);
+}
 
-    if (worktreeResult instanceof Error) {
-      createSpinner.stop("Failed to create worktree");
-      p.cancel(`Could not create worktree: ${worktreeResult.message}`);
-      process.exit(1);
-    }
+async function ticket() {
+  p.intro("sprout ticket - create worktree from Linear ticket");
 
-    createSpinner.stop("Worktree created");
+  const apiKey = await getLinearApiKey();
+  const repoRoot = await getRepoRoot();
+
+  const spinner = p.spinner();
+  spinner.start("Fetching Linear issues...");
+
+  let issues: LinearIssue[];
+  try {
+    issues = await fetchLinearIssues(apiKey);
+  } catch (e) {
+    spinner.stop("Failed to fetch issues");
+    p.cancel(
+      `Could not fetch Linear issues: ${e instanceof Error ? e.message : e}`,
+    );
+    process.exit(1);
   }
 
-  p.outro(`Launching shell in ${worktreePath}`);
+  spinner.stop(`Found ${issues.length} assigned issues`);
 
-  const shell = process.env.SHELL || "/bin/bash";
-  const proc = Bun.spawn([shell], {
-    cwd: worktreePath,
-    stdin: "inherit",
-    stdout: "inherit",
-    stderr: "inherit",
+  if (issues.length === 0) {
+    p.outro("No assigned issues found");
+    process.exit(0);
+  }
+
+  const selected = await p.autocomplete({
+    message: "Select a ticket to checkout as a worktree",
+    options: issues.map((issue) => ({
+      value: issue,
+      label: `${issue.identifier}: ${issue.title}`,
+      hint: `${issue.state.name} · ${issue.priorityLabel}`,
+    })),
+    filter: fuzzyFilter,
   });
-  await proc.exited;
+
+  if (p.isCancel(selected)) {
+    p.cancel("Cancelled");
+    process.exit(0);
+  }
+
+  const issue = selected as LinearIssue;
+  const worktreePath = `${repoRoot}--${slugify(issue.branchName)}`;
+
+  await ensureWorktree(worktreePath, issue.identifier, async () => {
+    await $`git worktree add ${worktreePath} -b ${issue.branchName}`.quiet();
+  });
+
+  await launchShell(worktreePath);
 }
 
 async function clean() {
@@ -204,14 +190,23 @@ const cleanCommand = command({
   },
 });
 
+const ticketCommand = command({
+  name: "ticket",
+  help: {
+    description: "Create worktree from a Linear ticket",
+  },
+});
+
 const argv = cli({
   name: "sprout",
   version: "0.1.0",
-  commands: [cleanCommand],
+  commands: [cleanCommand, ticketCommand],
 });
 
 if (argv.command === "clean") {
   await clean();
+} else if (argv.command === "ticket") {
+  await ticket();
 } else {
   await checkout();
 }
