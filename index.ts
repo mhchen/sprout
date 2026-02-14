@@ -21,11 +21,11 @@ interface PR {
 
 function fuzzyFilter(
   search: string,
-  option: { label: string; hint?: string },
+  option: { label?: string; hint?: string },
 ): boolean {
   const needle = search.toLowerCase();
   return (
-    fuzzysearch(needle, option.label.toLowerCase()) ||
+    fuzzysearch(needle, (option.label ?? "").toLowerCase()) ||
     fuzzysearch(needle, (option.hint ?? "").toLowerCase())
   );
 }
@@ -138,6 +138,39 @@ async function ticket() {
   await switchToWorktree(worktreePath);
 }
 
+async function open() {
+  p.intro("sprout open - switch to an existing worktree");
+
+  const repoRoot = await getRepoRoot();
+  const worktrees = await parseWorktrees();
+
+  const sproutWorktrees = worktrees.filter((wt) =>
+    wt.path.startsWith(repoRoot + "--"),
+  );
+
+  if (sproutWorktrees.length === 0) {
+    p.outro("No sprout worktrees found");
+    process.exit(0);
+  }
+
+  const selected = await p.autocomplete({
+    message: "Select a worktree to open",
+    options: sproutWorktrees.map((wt) => ({
+      value: wt.path,
+      label: wt.branch,
+      hint: wt.path,
+    })),
+    filter: fuzzyFilter,
+  });
+
+  if (p.isCancel(selected)) {
+    p.cancel("Cancelled");
+    process.exit(0);
+  }
+
+  await switchToWorktree(selected as string);
+}
+
 async function clean() {
   p.intro("sprout clean - remove worktrees");
 
@@ -183,10 +216,29 @@ async function clean() {
   p.outro("Done");
 }
 
+async function root() {
+  const repoRoot = await getRepoRoot();
+  await switchToWorktree(repoRoot);
+}
+
 const cleanCommand = command({
   name: "clean",
   help: {
     description: "Remove worktrees",
+  },
+});
+
+const openCommand = command({
+  name: "open",
+  help: {
+    description: "Switch to an existing worktree",
+  },
+});
+
+const rootCommand = command({
+  name: "root",
+  help: {
+    description: "Switch to the root repo directory",
   },
 });
 
@@ -200,11 +252,15 @@ const ticketCommand = command({
 const argv = cli({
   name: "sprout",
   version: "0.1.0",
-  commands: [cleanCommand, ticketCommand],
+  commands: [cleanCommand, openCommand, rootCommand, ticketCommand],
 });
 
 if (argv.command === "clean") {
   await clean();
+} else if (argv.command === "open") {
+  await open();
+} else if (argv.command === "root") {
+  await root();
 } else if (argv.command === "ticket") {
   await ticket();
 } else {
