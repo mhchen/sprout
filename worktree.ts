@@ -69,9 +69,12 @@ export async function ensureWorktree(
     await create();
   } catch (e) {
     spinner.stop("Failed to create worktree");
-    p.cancel(
-      `Could not create worktree: ${e instanceof Error ? e.message : e}`,
-    );
+    const stderr =
+      e instanceof Error && "stderr" in e
+        ? Buffer.from(e.stderr as ArrayBuffer).toString().trim()
+        : "";
+    const detail = stderr || (e instanceof Error ? e.message : String(e));
+    p.cancel(`Could not create worktree: ${detail}`);
     process.exit(1);
   }
 
