@@ -78,14 +78,20 @@ export async function ensureWorktree(
   spinner.stop("Worktree created");
 }
 
-export async function launchShell(worktreePath: string): Promise<void> {
-  p.outro(`Launching shell in ${worktreePath}`);
-  const shell = process.env.SHELL || "/bin/bash";
-  const proc = Bun.spawn([shell], {
-    cwd: worktreePath,
-    stdin: "inherit",
-    stdout: "inherit",
-    stderr: "inherit",
-  });
-  await proc.exited;
+export async function switchToWorktree(worktreePath: string): Promise<void> {
+  const dirFile = process.env.SPROUT_DIR_FILE;
+  if (dirFile) {
+    await Bun.write(dirFile, worktreePath);
+    p.outro(`Switching to ${worktreePath}`);
+  } else {
+    p.outro(`Launching shell in ${worktreePath}`);
+    const shell = process.env.SHELL || "/bin/bash";
+    const proc = Bun.spawn([shell], {
+      cwd: worktreePath,
+      stdin: "inherit",
+      stdout: "inherit",
+      stderr: "inherit",
+    });
+    await proc.exited;
+  }
 }

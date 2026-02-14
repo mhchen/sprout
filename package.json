@@ -7,6 +7,9 @@
   "bin": {
     "sprout": "./index.ts"
   },
+  "scripts": {
+    "postinstall": "sh postinstall.sh"
+  },
   "devDependencies": {
     "@types/bun": "latest",
     "@types/fuzzysearch": "^1.0.2"

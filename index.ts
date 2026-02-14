@@ -9,7 +9,7 @@ import {
   getRepoRoot,
   parseWorktrees,
   ensureWorktree,
-  launchShell,
+  switchToWorktree,
 } from "./worktree";
 
 interface PR {
@@ -83,7 +83,7 @@ async function checkout() {
     await $`git worktree add ${worktreePath} ${pr.headRefName}`.quiet();
   });
 
-  await launchShell(worktreePath);
+  await switchToWorktree(worktreePath);
 }
 
 async function ticket() {
@@ -135,7 +135,7 @@ async function ticket() {
     await $`git worktree add ${worktreePath} -b ${issue.branchName}`.quiet();
   });
 
-  await launchShell(worktreePath);
+  await switchToWorktree(worktreePath);
 }
 
 async function clean() {
