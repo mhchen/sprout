@@ -279,29 +279,33 @@ async function root() {
 
 const cleanCommand = command({
   name: "clean",
+  alias: "c",
   help: {
-    description: "Remove worktrees",
+    description: "Remove worktrees (alias: c)",
   },
 });
 
 const openCommand = command({
   name: "open",
+  alias: "o",
   help: {
-    description: "Switch to an existing worktree",
+    description: "Switch to an existing worktree (alias: o)",
   },
 });
 
 const rootCommand = command({
   name: "root",
+  alias: "r",
   help: {
-    description: "Switch to the root repo directory",
+    description: "Switch to the root repo directory (alias: r)",
   },
 });
 
 const ticketCommand = command({
   name: "ticket",
+  alias: "t",
   help: {
-    description: "Create worktree from a Linear ticket",
+    description: "Create worktree from a Linear ticket (alias: t)",
   },
 });
 
@@ -319,6 +323,10 @@ if (argv.command === "clean") {
   await root();
 } else if (argv.command === "ticket") {
   await ticket();
+} else if (argv._.length > 0) {
+  console.error(`Unknown command: ${argv._[0]}`);
+  argv.showHelp();
+  process.exit(1);
 } else {
   await checkout();
 }
