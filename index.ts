@@ -30,8 +30,8 @@ function fuzzyFilter(
   );
 }
 
-async function checkout() {
-  p.intro("sprout - checkout PRs as worktrees");
+async function pr() {
+  p.intro("sprout pr - checkout PRs as worktrees");
 
   const repoRoot = await getRepoRoot();
 
@@ -139,7 +139,7 @@ async function ticket() {
 }
 
 async function open() {
-  p.intro("sprout open - switch to an existing worktree");
+  p.intro("sprout - switch to an existing worktree");
 
   const repoRoot = await getRepoRoot();
   const worktrees = await parseWorktrees();
@@ -289,7 +289,15 @@ const openCommand = command({
   name: "open",
   alias: "o",
   help: {
-    description: "Switch to an existing worktree (alias: o)",
+    description: "Switch to an existing worktree (default, alias: o)",
+  },
+});
+
+const prCommand = command({
+  name: "pr",
+  alias: "p",
+  help: {
+    description: "Checkout a PR as a worktree (alias: p)",
   },
 });
 
@@ -312,13 +320,15 @@ const ticketCommand = command({
 const argv = cli({
   name: "sprout",
   version: "0.1.0",
-  commands: [cleanCommand, openCommand, rootCommand, ticketCommand],
+  commands: [cleanCommand, openCommand, prCommand, rootCommand, ticketCommand],
 });
 
 if (argv.command === "clean") {
   await clean();
 } else if (argv.command === "open") {
   await open();
+} else if (argv.command === "pr") {
+  await pr();
 } else if (argv.command === "root") {
   await root();
 } else if (argv.command === "ticket") {
@@ -328,5 +338,5 @@ if (argv.command === "clean") {
   argv.showHelp();
   process.exit(1);
 } else {
-  await checkout();
+  await open();
 }
