@@ -186,13 +186,46 @@ async function clean() {
     process.exit(0);
   }
 
+  const spinner = p.spinner();
+  spinner.start("Checking worktree status...");
+
+  // Get merged branches and per-worktree dirty status in parallel
+  const mergedOutput = await $`git branch --merged main`
+    .text()
+    .catch(() => "");
+  const mergedBranches = new Set(
+    mergedOutput
+      .split("\n")
+      .map((b) => b.trim().replace(/^\* /, ""))
+      .filter(Boolean),
+  );
+
+  const statuses = await Promise.all(
+    sproutWorktrees.map(async (wt) => {
+      const status = await $`git -C ${wt.path} status --porcelain`
+        .text()
+        .catch(() => "");
+      const dirty = status.trim().length > 0;
+      const merged = mergedBranches.has(wt.branch);
+      return { ...wt, dirty, merged };
+    }),
+  );
+
+  spinner.stop("Worktree status loaded");
+
   const selected = await p.multiselect({
     message: "Select worktrees to remove",
-    options: sproutWorktrees.map((wt) => ({
-      value: wt.path,
-      label: wt.branch,
-      hint: wt.path,
-    })),
+    options: statuses.map((wt) => {
+      const tags: string[] = [];
+      if (wt.merged) tags.push("merged");
+      if (wt.dirty) tags.push("has uncommitted changes");
+      const hint = tags.length > 0 ? tags.join(" · ") : "clean";
+      return {
+        value: wt.path,
+        label: wt.branch,
+        hint,
+      };
+    }),
     required: false,
   });
 
@@ -203,8 +236,31 @@ async function clean() {
 
   const paths = selected as string[];
 
-  const spinner = p.spinner();
-  spinner.start(`Removing ${paths.length} worktree(s)...`);
+  // Warn about dirty worktrees
+  const dirtySelected = statuses.filter(
+    (wt) => wt.dirty && paths.includes(wt.path),
+  );
+
+  if (dirtySelected.length > 0) {
+    p.log.warn(
+      `${dirtySelected.length} selected worktree(s) have uncommitted changes:`,
+    );
+    for (const wt of dirtySelected) {
+      p.log.warn(`  ${wt.branch}`);
+    }
+
+    const confirmed = await p.confirm({
+      message: "Remove these worktrees anyway? Uncommitted changes will be lost.",
+    });
+
+    if (p.isCancel(confirmed) || !confirmed) {
+      p.cancel("Cancelled");
+      process.exit(0);
+    }
+  }
+
+  const removeSpinner = p.spinner();
+  removeSpinner.start(`Removing ${paths.length} worktree(s)...`);
 
   for (const path of paths) {
     await $`git worktree remove ${path}`.quiet().catch(() => {
@@ -212,7 +268,7 @@ async function clean() {
     });
   }
 
-  spinner.stop(`Removed ${paths.length} worktree(s)`);
+  removeSpinner.stop(`Removed ${paths.length} worktree(s)`);
   p.outro("Done");
 }
 
