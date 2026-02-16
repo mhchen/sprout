@@ -79,6 +79,29 @@ export async function ensureWorktree(
   }
 
   spinner.stop("Worktree created");
+
+  await installDependencies(worktreePath);
+}
+
+const lockfileCommands: Record<string, string[]> = {
+  "bun.lockb": ["bun", "install"],
+  "bun.lock": ["bun", "install"],
+  "package-lock.json": ["npm", "install"],
+  "yarn.lock": ["yarn", "install"],
+  "pnpm-lock.yaml": ["pnpm", "install"],
+};
+
+async function installDependencies(worktreePath: string): Promise<void> {
+  for (const [lockfile, cmd] of Object.entries(lockfileCommands)) {
+    const exists = await Bun.file(`${worktreePath}/${lockfile}`).exists();
+    if (exists) {
+      const spinner = p.spinner();
+      spinner.start(`Installing dependencies (${cmd[0]})...`);
+      await $`${cmd} --cwd ${worktreePath}`.quiet();
+      spinner.stop("Dependencies installed");
+      return;
+    }
+  }
 }
 
 export async function switchToWorktree(worktreePath: string): Promise<void> {
