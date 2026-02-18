@@ -272,10 +272,31 @@ async function clean() {
   p.outro("Done");
 }
 
+async function create(branchName: string) {
+  p.intro("sprout create - create worktree with a new branch");
+
+  const repoRoot = await getRepoRoot();
+  const worktreePath = `${repoRoot}--${slugify(branchName)}`;
+
+  await ensureWorktree(worktreePath, branchName, async () => {
+    await $`git worktree add ${worktreePath} -b ${branchName}`.quiet();
+  });
+
+  await switchToWorktree(worktreePath);
+}
+
 async function root() {
   const repoRoot = await getRepoRoot();
   await switchToWorktree(repoRoot);
 }
+
+const createCommand = command({
+  name: "create",
+  parameters: ["<branch>"],
+  help: {
+    description: "Create a worktree with a new branch",
+  },
+});
 
 const cleanCommand = command({
   name: "clean",
@@ -320,10 +341,17 @@ const ticketCommand = command({
 const argv = cli({
   name: "sprout",
   version: "0.1.0",
-  commands: [cleanCommand, openCommand, prCommand, rootCommand, ticketCommand],
+  commands: [createCommand, cleanCommand, openCommand, prCommand, rootCommand, ticketCommand],
 });
 
-if (argv.command === "clean") {
+if (argv.command === "create") {
+  const branch = argv._.at(0);
+  if (!branch) {
+    console.error("Usage: sprout create <branch>");
+    process.exit(1);
+  }
+  await create(branch);
+} else if (argv.command === "clean") {
   await clean();
 } else if (argv.command === "open") {
   await open();
