@@ -290,35 +290,22 @@ async function branch() {
 
   const repoRoot = await getRepoRoot();
 
-  const spinner = p.spinner();
-  spinner.start("Fetching branches...");
-
-  await $`git fetch --prune`.quiet().catch(() => {});
-
-  const branchOutput = await $`git branch -a --format=%(refname:short)`.text();
-  const worktrees = await parseWorktrees();
-  const worktreeBranches = new Set(worktrees.map((wt) => wt.branch));
+  const format = "%(refname:short)";
+  const branchOutput = await $`git branch --format=${format}`.text();
 
   const branches = branchOutput
     .split("\n")
     .map((b) => b.trim())
-    .filter(Boolean)
-    .map((b) => b.replace(/^origin\//, ""))
-    .filter((b) => b !== "HEAD" && !worktreeBranches.has(b));
+    .filter(Boolean);
 
-  // Deduplicate (local and remote may refer to same branch)
-  const unique = [...new Set(branches)];
-
-  spinner.stop(`Found ${unique.length} available branches`);
-
-  if (unique.length === 0) {
-    p.outro("No branches available (all are already checked out as worktrees)");
+  if (branches.length === 0) {
+    p.outro("No local branches found");
     process.exit(0);
   }
 
   const selected = await p.autocomplete({
     message: "Select a branch to checkout as a worktree",
-    options: unique.map((b) => ({
+    options: branches.map((b) => ({
       value: b,
       label: b,
     })),

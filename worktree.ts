@@ -83,21 +83,21 @@ export async function ensureWorktree(
   await installDependencies(worktreePath);
 }
 
-const lockfileCommands: Record<string, string[]> = {
-  "bun.lockb": ["bun", "install"],
-  "bun.lock": ["bun", "install"],
-  "package-lock.json": ["npm", "install"],
-  "yarn.lock": ["yarn", "install"],
-  "pnpm-lock.yaml": ["pnpm", "install"],
+const lockfileCommands: Record<string, { cmd: string[]; cwdFlag: string }> = {
+  "bun.lockb": { cmd: ["bun", "install"], cwdFlag: "--cwd" },
+  "bun.lock": { cmd: ["bun", "install"], cwdFlag: "--cwd" },
+  "package-lock.json": { cmd: ["npm", "install"], cwdFlag: "--prefix" },
+  "yarn.lock": { cmd: ["yarn", "install"], cwdFlag: "--cwd" },
+  "pnpm-lock.yaml": { cmd: ["pnpm", "install"], cwdFlag: "--dir" },
 };
 
 async function installDependencies(worktreePath: string): Promise<void> {
-  for (const [lockfile, cmd] of Object.entries(lockfileCommands)) {
+  for (const [lockfile, { cmd, cwdFlag }] of Object.entries(lockfileCommands)) {
     const exists = await Bun.file(`${worktreePath}/${lockfile}`).exists();
     if (exists) {
       const spinner = p.spinner();
       spinner.start(`Installing dependencies (${cmd[0]})...`);
-      await $`${cmd} --cwd ${worktreePath}`.quiet();
+      await $`${cmd} ${cwdFlag} ${worktreePath}`.quiet();
       spinner.stop("Dependencies installed");
       return;
     }
