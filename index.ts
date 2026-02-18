@@ -285,6 +285,61 @@ async function create(branchName: string) {
   await switchToWorktree(worktreePath);
 }
 
+async function branch() {
+  p.intro("sprout branch - create worktree from an existing branch");
+
+  const repoRoot = await getRepoRoot();
+
+  const spinner = p.spinner();
+  spinner.start("Fetching branches...");
+
+  await $`git fetch --prune`.quiet().catch(() => {});
+
+  const branchOutput = await $`git branch -a --format=%(refname:short)`.text();
+  const worktrees = await parseWorktrees();
+  const worktreeBranches = new Set(worktrees.map((wt) => wt.branch));
+
+  const branches = branchOutput
+    .split("\n")
+    .map((b) => b.trim())
+    .filter(Boolean)
+    .map((b) => b.replace(/^origin\//, ""))
+    .filter((b) => b !== "HEAD" && !worktreeBranches.has(b));
+
+  // Deduplicate (local and remote may refer to same branch)
+  const unique = [...new Set(branches)];
+
+  spinner.stop(`Found ${unique.length} available branches`);
+
+  if (unique.length === 0) {
+    p.outro("No branches available (all are already checked out as worktrees)");
+    process.exit(0);
+  }
+
+  const selected = await p.autocomplete({
+    message: "Select a branch to checkout as a worktree",
+    options: unique.map((b) => ({
+      value: b,
+      label: b,
+    })),
+    filter: fuzzyFilter,
+  });
+
+  if (p.isCancel(selected)) {
+    p.cancel("Cancelled");
+    process.exit(0);
+  }
+
+  const branchName = selected as string;
+  const worktreePath = `${repoRoot}--${slugify(branchName)}`;
+
+  await ensureWorktree(worktreePath, branchName, async () => {
+    await $`git worktree add ${worktreePath} ${branchName}`.quiet();
+  });
+
+  await switchToWorktree(worktreePath);
+}
+
 async function root() {
   const repoRoot = await getRepoRoot();
   await switchToWorktree(repoRoot);
@@ -295,6 +350,14 @@ const createCommand = command({
   parameters: ["<branch>"],
   help: {
     description: "Create a worktree with a new branch",
+  },
+});
+
+const branchCommand = command({
+  name: "branch",
+  alias: "b",
+  help: {
+    description: "Create worktree from an existing branch (alias: b)",
   },
 });
 
@@ -341,10 +404,12 @@ const ticketCommand = command({
 const argv = cli({
   name: "sprout",
   version: "0.1.0",
-  commands: [createCommand, cleanCommand, openCommand, prCommand, rootCommand, ticketCommand],
+  commands: [branchCommand, createCommand, cleanCommand, openCommand, prCommand, rootCommand, ticketCommand],
 });
 
-if (argv.command === "create") {
+if (argv.command === "branch") {
+  await branch();
+} else if (argv.command === "create") {
   const branch = argv._.at(0);
   if (!branch) {
     console.error("Usage: sprout create <branch>");
