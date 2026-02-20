@@ -6,17 +6,16 @@ Worktrees are created as sibling directories next to your repo (e.g. `my-repo--f
 
 ## Prerequisites
 
-- [Bun](https://bun.sh)
 - [GitHub CLI](https://cli.github.com/) (`gh`) — authenticated via `gh auth login`
 - A [Linear API key](https://linear.app/settings/api) (only needed for the `ticket` command — sprout will prompt you on first use)
 
 ## Install
 
 ```sh
-bun install -g github:mhchen/sprout
+curl -fsSL https://raw.githubusercontent.com/mhchen/sprout/main/install.sh | bash
 ```
 
-After install, you'll see a message with a `source` line to add to your `~/.zshrc` or `~/.bashrc`. This shell wrapper lets sprout `cd` your shell into worktree directories. Add it, then restart your shell.
+This installs [Bun](https://bun.sh) (if needed), installs sprout globally, and adds a shell wrapper to your shell config. Restart your shell after installing.
 
 > **Without the shell wrapper**, sprout still works — it just opens a new subshell in the worktree directory instead of changing your current shell's directory.
 

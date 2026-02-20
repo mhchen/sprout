@@ -5,7 +5,7 @@ sprout() {
   local dir_file exit_code dir
   dir_file=$(mktemp)
 
-  SPROUT_DIR_FILE="$dir_file" command sprout "$@"
+  SPROUT_DIR_FILE="$dir_file" command sprout-cli "$@"
   exit_code=$?
 
   if [ "$exit_code" -eq 0 ] && [ -f "$dir_file" ]; then

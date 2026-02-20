@@ -5,12 +5,9 @@
   "module": "index.ts",
   "type": "module",
   "bin": {
-    "sprout": "./index.ts"
+    "sprout-cli": "./index.ts"
   },
-  "scripts": {
-    "postinstall": "sh postinstall.sh"
-  },
-  "devDependencies": {
+"devDependencies": {
     "@types/bun": "latest",
     "@types/fuzzysearch": "^1.0.2"
   },
