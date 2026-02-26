@@ -33,6 +33,10 @@ Browse your repo's open PRs with fuzzy search, pick one, and check it out as a w
 
 Browse your assigned Linear issues with fuzzy search, pick one, and create a worktree with the ticket's branch name. On first run, you'll be prompted for your Linear API key (stored in `~/.sprout/config`).
 
+### `sprout branch`
+
+Browse local branches with fuzzy search, pick one, and check it out as a worktree.
+
 ### `sprout create <branch>`
 
 Create a worktree with a new branch.
@@ -49,6 +53,7 @@ Switch back to the main repo directory.
 
 | Command  | Alias |
 | -------- | ----- |
+| `branch` | `b`   |
 | `open`   | `o`   |
 | `pr`     | `p`   |
 | `ticket` | `t`   |
