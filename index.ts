@@ -153,9 +153,25 @@ async function open() {
     process.exit(0);
   }
 
+  // Sort by most recently used (HEAD file mtime in worktree gitdir)
+  const withMtime = await Promise.all(
+    sproutWorktrees.map(async (wt) => {
+      let mtime = 0;
+      try {
+        const dotGit = await Bun.file(`${wt.path}/.git`).text();
+        const match = dotGit.match(/^gitdir:\s*(.+)/);
+        if (match?.[1]) {
+          mtime = Bun.file(`${match[1].trim()}/HEAD`).lastModified;
+        }
+      } catch {}
+      return { ...wt, mtime };
+    }),
+  );
+  withMtime.sort((a, b) => b.mtime - a.mtime);
+
   const selected = await p.autocomplete({
     message: "Select a worktree to open",
-    options: sproutWorktrees.map((wt) => ({
+    options: withMtime.map((wt) => ({
       value: wt.path,
       label: wt.branch,
       hint: wt.path,
