@@ -51,9 +51,13 @@ do_install() {
     echo ""
   fi
 
-  # Install sprout globally
+  # Install or update sprout globally
   info "Installing sprout via bun..."
-  bun install -g "$REPO"
+  if bun pm ls -g 2>/dev/null | grep -q sprout; then
+    (cd ~/.bun/install/global && bun update sprout)
+  else
+    bun install -g "$REPO"
+  fi
   echo ""
 
   if ! command -v sprout-cli >/dev/null 2>&1; then

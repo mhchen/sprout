@@ -1,6 +1,6 @@
 {
   "name": "sprout",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Checkout GitHub PRs as git worktrees",
   "module": "index.ts",
   "type": "module",
