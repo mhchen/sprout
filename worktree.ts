@@ -80,7 +80,70 @@ export async function ensureWorktree(
 
   spinner.stop("Worktree created");
 
+  await copyWorktreeIncludes(worktreePath);
   await installDependencies(worktreePath);
+}
+
+async function copyWorktreeIncludes(worktreePath: string): Promise<void> {
+  const repoRoot = await getRepoRoot();
+  const includeFile = Bun.file(`${repoRoot}/.worktreeinclude`);
+  if (!(await includeFile.exists())) return;
+
+  const content = await includeFile.text();
+  const patterns = content
+    .split("\n")
+    .map((line) => line.trim())
+    .filter((line) => line && !line.startsWith("#"));
+
+  if (patterns.length === 0) return;
+
+  const filesToCopy = new Set<string>();
+  for (const pattern of patterns) {
+    // Directory patterns (trailing /) need /** to match contents
+    const globPattern = pattern.endsWith("/") ? `${pattern}**` : pattern;
+    const glob = new Bun.Glob(globPattern);
+    for await (const file of glob.scan({ cwd: repoRoot, dot: true })) {
+      filesToCopy.add(file);
+    }
+  }
+
+  if (filesToCopy.size === 0) return;
+
+  // Safety: only copy gitignored files (tracked files are already in the worktree)
+  const proc = Bun.spawn(["git", "check-ignore", "--stdin"], {
+    cwd: repoRoot,
+    stdin: new Blob([[...filesToCopy].join("\n")]),
+  });
+  const checkOutput = await new Response(proc.stdout).text();
+  await proc.exited;
+
+  const ignoredFiles = new Set(
+    checkOutput
+      .split("\n")
+      .map((f) => f.trim())
+      .filter(Boolean),
+  );
+
+  const toCopy = [...filesToCopy].filter((f) => ignoredFiles.has(f));
+  if (toCopy.length === 0) return;
+
+  const spinner = p.spinner();
+  spinner.start("Copying included files...");
+
+  for (const file of toCopy) {
+    const src = `${repoRoot}/${file}`;
+    const dest = `${worktreePath}/${file}`;
+    const parentDir = dest.substring(0, dest.lastIndexOf("/"));
+    if (parentDir !== worktreePath) {
+      await $`mkdir -p ${parentDir}`.quiet();
+    }
+    // Use -c for copy-on-write on APFS, fall back to regular cp
+    await $`cp -c ${src} ${dest}`
+      .quiet()
+      .catch(() => $`cp ${src} ${dest}`.quiet());
+  }
+
+  spinner.stop(`Copied ${toCopy.length} included file(s)`);
 }
 
 const lockfileCommands: Record<string, { cmd: string[]; cwdFlag: string }> = {
